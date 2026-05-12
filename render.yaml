@@ -1,0 +1,24 @@
+# Render Blueprint — deploys the CEFANET API as a single Node web service.
+# To use:
+#   1. Push the repo to GitHub
+#   2. Render dashboard → New → Blueprint → connect this repo
+#   3. Fill in the secrets prompted (DATABASE_URL, CORS_ORIGIN)
+services:
+  - type: web
+    name: cefanet-api
+    runtime: node
+    plan: free
+    rootDir: .
+    # Render installs all workspaces because root package.json declares them
+    buildCommand: npm install
+    startCommand: npm run --workspace=@cefanet/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        sync: false # paste your Neon URL in the Render dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render generates a strong random value
+      - key: CORS_ORIGIN
+        sync: false # comma-separated, no spaces: https://YOUR-PROJECT.web.app,https://YOUR-PROJECT.firebaseapp.com

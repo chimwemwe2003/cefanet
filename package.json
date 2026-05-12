@@ -1,0 +1,36 @@
+{
+  "name": "cefanet-dnb",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:push": "npm run -w @cefanet/db push",
+    "seed": "tsx --env-file=.env scripts/seed.ts",
+    "dev:api": "npm run -w @cefanet/api dev",
+    "dev:web": "npm run -w @cefanet/web dev",
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "build:hosting": "npm run build:static --workspace=@cefanet/web",
+    "deploy:hosting": "npm run build:hosting && npx --yes firebase-tools@13 deploy --only hosting"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.30",
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@cefanet/db": "*",
+    "@cefanet/shared": "*",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.31.4",
+    "postgres": "^3.4.4",
+    "zod": "^3.22.4"
+  }
+}
