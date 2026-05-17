@@ -15,6 +15,10 @@ import { projectsRouter } from "./routes/projects.js";
 import { financialsRouter } from "./routes/financials.js";
 import { bursariesRouter } from "./routes/bursaries.js";
 import { alertsRouter } from "./routes/alerts.js";
+import { koboRouter } from "./routes/kobo.js";
+import { eventsRouter } from "./routes/events.js";
+import { usersRouter } from "./routes/users.js";
+import { seedAppUsersIfEmpty } from "./services/app-users.js";
 
 const app = express();
 // Render/Railway/Fly inject PORT. Locally we use API_PORT.
@@ -70,6 +74,9 @@ app.use("/projects", projectsRouter);
 app.use("/financials", financialsRouter);
 app.use("/bursaries", bursariesRouter);
 app.use("/alerts", alertsRouter);
+app.use("/kobo", koboRouter);
+app.use("/events", eventsRouter);
+app.use("/admin/users", usersRouter);
 
 // 404
 app.use((req, res) => {
@@ -86,4 +93,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`[cefanet-api] listening on http://localhost:${PORT}`);
+  // Bootstrap: ensure there is at least one account per role to sign in with.
+  void seedAppUsersIfEmpty();
 });

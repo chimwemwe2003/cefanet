@@ -18,6 +18,7 @@ import {
   Camera,
   ScrollText,
   FormInput,
+  UserCog,
   LogOut,
   Menu,
   X,
@@ -69,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Governance",
     items: [
+      { href: "/admin/users", label: "User Management", icon: UserCog, capability: "admin:users" },
       { href: "/audit", label: "Audit Trail", icon: ScrollText, capability: "view:audit" },
       { href: "/reports", label: "Reports", icon: FileText, capability: "export:reports" },
     ],

@@ -82,6 +82,22 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ---------- CDF-MS application users (7-role RBAC model) ----------
+// Separate from the legacy `users` table so the role set can evolve freely.
+// `role` is a plain string validated by the API against the RBAC role list.
+export const appUsers = pgTable("app_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: varchar("email", { length: 160 }).notNull().unique(),
+  passwordHash: varchar("password_hash", { length: 200 }).notNull(),
+  fullName: varchar("full_name", { length: 160 }).notNull(),
+  role: varchar("role", { length: 40 }).notNull(),
+  constituencyId: integer("constituency_id"),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  createdBy: varchar("created_by", { length: 160 }).notNull().default("System"),
+});
+
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   constituencyId: integer("constituency_id")
@@ -246,6 +262,8 @@ export type NewBursary = typeof bursaries.$inferInsert;
 export type Beneficiary = typeof beneficiaries.$inferSelect;
 export type NewBeneficiary = typeof beneficiaries.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type AppUser = typeof appUsers.$inferSelect;
+export type NewAppUser = typeof appUsers.$inferInsert;
 export type NewUser = typeof users.$inferInsert;
 export type Alert = typeof alerts.$inferSelect;
 export type NewAlert = typeof alerts.$inferInsert;

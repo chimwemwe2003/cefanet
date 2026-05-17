@@ -6,6 +6,10 @@ import { Sidebar } from "./sidebar";
 import { RoleGate } from "./role-gate";
 import { ErrorBoundary } from "../error-boundary";
 import { ScopeBadge } from "./scope-badge";
+import { LiveProvider } from "./live-provider";
+import { ToastHost } from "./live-ui";
+import { FieldChrome } from "./field-chrome";
+import { useCdfmsAuth } from "@/lib/cdfms/store";
 import { normalizePathname } from "@/lib/utils";
 
 export function CdfmsChrome({ children }: { children: ReactNode }) {
@@ -26,6 +30,25 @@ export function CdfmsChrome({ children }: { children: ReactNode }) {
 
   return (
     <RoleGate>
+      <ChromeRouter>{children}</ChromeRouter>
+    </RoleGate>
+  );
+}
+
+/**
+ * Picks the right shell for the signed-in role.
+ *  - Ward officers get the calm, phone-app-style Field chrome.
+ *  - Everyone else gets the ministry dashboard chrome.
+ */
+function ChromeRouter({ children }: { children: ReactNode }) {
+  const { role } = useCdfmsAuth();
+
+  if (role === "wdc_agent") {
+    return <FieldChrome>{children}</FieldChrome>;
+  }
+
+  return (
+    <LiveProvider>
       <div className="min-h-screen bg-ink-50 flex">
         <Sidebar />
         <div className="flex-1 min-w-0 flex flex-col">
@@ -38,6 +61,7 @@ export function CdfmsChrome({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
-    </RoleGate>
+      <ToastHost />
+    </LiveProvider>
   );
 }

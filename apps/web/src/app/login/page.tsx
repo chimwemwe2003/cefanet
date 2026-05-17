@@ -1,136 +1,241 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogIn, ShieldCheck, Users } from "lucide-react";
-import { api } from "@/lib/api";
-import { useAuth } from "@/lib/store";
-import { LoginRequestSchema, type LoginRequest } from "@cefanet/shared";
+import { useRouter } from "next/navigation";
+import { LogIn, Loader2, AlertTriangle, ChevronDown, KeyRound } from "lucide-react";
+import { useCdfmsAuth } from "@/lib/cdfms/store";
+import { apiLogin, ApiError, isApiConfigured } from "@/lib/cdfms/auth-api";
+import { ROLE_LABEL, ROLE_DESCRIPTION, type Role } from "@/lib/cdfms/rbac";
+import { CONSTITUENCIES } from "@/lib/cdfms/constituencies";
+import { DemoWatermark } from "@/components/cdfms/demo-watermark";
+
+const DEMO_PASSWORD = "demo1234";
+const DEMO_ACCOUNTS: Array<{ email: string; label: string }> = [
+  { email: "admin@cefanet.org", label: "System Administrator" },
+  { email: "ps@mlgrd.gov.zm", label: "Ministry Official" },
+  { email: "officer@cefanet.org", label: "Constituency Officer" },
+  { email: "ward@cefanet.org", label: "Ward Officer" },
+  { email: "auditor@ago.gov.zm", label: "Auditor General Office" },
+  { email: "cso@cefanet.org", label: "CSO / CEFANET Stakeholder" },
+];
+
+const OFFLINE_ROLES: Role[] = [
+  "constituency_officer",
+  "ministry_official",
+  "auditor",
+  "wdc_agent",
+  "cso_stakeholder",
+  "system_admin",
+];
 
 export default function LoginPage() {
   const router = useRouter();
-  const setAuth = useAuth((s) => s.setAuth);
+  const signInLive = useCdfmsAuth((s) => s.signInLive);
+  const signInDemo = useCdfmsAuth((s) => s.signInDemo);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offlineOpen, setOfflineOpen] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    setValue,
-  } = useForm<LoginRequest>({
-    resolver: zodResolver(LoginRequestSchema),
-    defaultValues: { email: "", password: "" },
-  });
+  function landingFor(role: Role): string {
+    return role === "wdc_agent" ? "/field" : "/dashboard";
+  }
 
-  async function onSubmit(values: LoginRequest): Promise<void> {
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+    setBusy(true);
     try {
-      const res = await api.login(values);
-      setAuth(res.token, res.user);
-      router.push("/");
+      const { token, user } = await apiLogin(email.trim(), password);
+      signInLive(token, {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        constituencyId: user.constituencyId,
+      });
+      router.push(landingFor(user.role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
+      setError(msg);
+    } finally {
+      setBusy(false);
     }
   }
 
-  function fillDemo(email: string): void {
-    setValue("email", email);
-    setValue("password", "demo123");
+  function fillDemo(demoEmail: string) {
+    setEmail(demoEmail);
+    setPassword(DEMO_PASSWORD);
+    setError(null);
+  }
+
+  function enterOffline(role: Role) {
+    const firstConst = CONSTITUENCIES[0]?.id ?? 1;
+    const scoped = role === "constituency_officer" || role === "wdc_agent";
+    signInDemo(role, `${ROLE_LABEL[role]} (demo)`, {
+      homeConstituencyId: scoped ? firstConst : undefined,
+    });
+    router.push(landingFor(role));
   }
 
   return (
-    <div className="max-w-md mx-auto mt-4 md:mt-12 flex flex-col gap-4">
-      <div className="card p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-lg bg-brand-600 text-white flex items-center justify-center">
-            <LogIn className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold">Sign in to CEFANET</h1>
-            <p className="text-xs text-slate-500">
-              Government and CEFANET staff only
-            </p>
-          </div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-ministry-700 via-ministry-800 to-ministry-900 p-4 md:p-8">
+      <DemoWatermark />
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
-          <div>
-            <label className="text-xs font-semibold text-slate-700">Email</label>
-            <input
-              type="email"
-              autoComplete="email"
-              className="input mt-1"
-              {...register("email")}
-            />
-            {errors.email ? (
-              <p className="text-xs text-red-600 mt-1">{errors.email.message}</p>
-            ) : null}
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-700">Password</label>
-            <input
-              type="password"
-              autoComplete="current-password"
-              className="input mt-1"
-              {...register("password")}
-            />
-            {errors.password ? (
-              <p className="text-xs text-red-600 mt-1">{errors.password.message}</p>
-            ) : null}
-          </div>
-          {error ? (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-              {error}
+      <div className="w-full max-w-5xl grid lg:grid-cols-2 rounded-2xl overflow-hidden shadow-2xl bg-white">
+        {/* Brand panel */}
+        <div className="bg-gradient-to-br from-ministry-700 to-ministry-900 text-white p-8 md:p-10 flex flex-col">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-lg bg-gold-500 text-ministry-900 flex items-center justify-center font-bold text-2xl shadow-ministry">
+              C
             </div>
-          ) : null}
-          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-      </div>
-
-      <div className="card p-4">
-        <div className="flex items-center gap-2 mb-2 text-sm font-semibold">
-          <ShieldCheck className="h-4 w-4 text-amber-600" />
-          Demo accounts
-        </div>
-        <ul className="space-y-2 text-sm">
-          <li className="flex items-center justify-between gap-2">
-            <div>
-              <div className="font-medium">admin@cefanet.org</div>
-              <div className="text-xs text-slate-500">Super Admin — full access</div>
-            </div>
-            <button
-              className="btn btn-secondary"
-              onClick={() => fillDemo("admin@cefanet.org")}
-              type="button"
-            >
-              Use
-            </button>
-          </li>
-          <li className="flex items-center justify-between gap-2">
-            <div>
-              <div className="font-medium">officer@lusaka.gov.zm</div>
-              <div className="text-xs text-slate-500">
-                District Officer — Lusaka Central
+            <div className="leading-tight">
+              <div className="font-serif text-xl">CEFANET CDF-MS</div>
+              <div className="text-[10px] uppercase tracking-[.2em] text-gold-200">
+                Republic of Zambia · MLGRD
               </div>
             </div>
+          </div>
+
+          <h1 className="font-serif text-3xl md:text-4xl leading-tight mt-10">
+            CEFANET Constituency Development Fund Management System
+          </h1>
+          <p className="text-sm text-ministry-100/80 mt-3 max-w-md leading-relaxed">
+            Real-time stewardship of <span className="font-semibold text-gold-200">K9.04 billion</span> across{" "}
+            <span className="font-semibold text-gold-200">226 constituencies</span>. Sign in with
+            the account issued to you by your System Administrator.
+          </p>
+
+          <div className="mt-auto pt-10 text-[11px] text-ministry-100/60 leading-relaxed">
+            One Zambia · One Nation · One System
+            <br />
+            Demo build · Not for production use
+          </div>
+        </div>
+
+        {/* Sign-in panel */}
+        <div className="p-6 md:p-10 flex flex-col">
+          <div className="text-[11px] uppercase tracking-[.2em] text-ministry-700 font-semibold">
+            Secure sign-in
+          </div>
+          <h2 className="font-serif text-2xl text-ink-900 mt-1">Sign in to your account</h2>
+          <p className="text-sm text-ink-500 mt-1">
+            Accounts are created and assigned by the System Administrator. Your role and data
+            scope are determined by your account.
+          </p>
+
+          <form onSubmit={handleLogin} className="mt-5 flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-semibold text-ink-700">Email address</label>
+              <input
+                type="email"
+                value={email}
+                autoComplete="username"
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@cefanet.org"
+                className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ministry-300 focus:border-ministry-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-ink-700">Password</label>
+              <input
+                type="password"
+                value={password}
+                autoComplete="current-password"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ministry-300 focus:border-ministry-500"
+              />
+            </div>
+
+            {error ? (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            ) : null}
+
             <button
-              className="btn btn-secondary"
-              onClick={() => fillDemo("officer@lusaka.gov.zm")}
-              type="button"
+              type="submit"
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-ministry-700 text-white text-sm font-semibold py-3 hover:bg-ministry-800 shadow-ministry-lg transition-colors disabled:opacity-60"
             >
-              Use
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+              {busy ? "Signing in…" : "Sign in"}
             </button>
-          </li>
-          <li className="flex items-start gap-2 text-xs text-slate-500 mt-2">
-            <Users className="h-3 w-3 mt-0.5" />
-            Password for both is <code className="font-mono">demo123</code>. Public
-            users see the dashboard without signing in.
-          </li>
-        </ul>
+          </form>
+
+          {/* Demo accounts */}
+          <div className="mt-5 rounded-lg border border-ink-200 bg-ink-50/60 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-ink-500 font-semibold">
+              <KeyRound className="h-3 w-3" /> Demo accounts · password{" "}
+              <code className="font-mono text-ministry-700">{DEMO_PASSWORD}</code>
+            </div>
+            <div className="mt-1.5 grid grid-cols-1 gap-1">
+              {DEMO_ACCOUNTS.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  onClick={() => fillDemo(a.email)}
+                  className="flex items-center justify-between text-left rounded-md px-2 py-1.5 hover:bg-white border border-transparent hover:border-ink-200 transition-colors"
+                >
+                  <span className="text-xs text-ink-700">{a.label}</span>
+                  <span className="text-[11px] font-mono text-ministry-600">{a.email}</span>
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] text-ink-400 mt-1.5">
+              Tap an account to fill the form, then press Sign in.
+            </div>
+          </div>
+
+          {/* Offline demo fallback */}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setOfflineOpen((v) => !v)}
+              className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-ink-800"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${offlineOpen ? "rotate-180" : ""}`} />
+              {isApiConfigured()
+                ? "Server unreachable? Use offline demo mode"
+                : "Offline demo mode (no server configured)"}
+            </button>
+            {offlineOpen ? (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Offline mode skips real authentication and lets you preview any role. Data is not
+                  saved to the database. Use this only if the server is down.
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {OFFLINE_ROLES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => enterOffline(r)}
+                      className="text-left rounded-md border border-ink-200 bg-white px-2 py-1.5 hover:border-ministry-300"
+                    >
+                      <div className="text-xs font-semibold text-ink-900">{ROLE_LABEL[r]}</div>
+                      <div className="text-[10px] text-ink-500 truncate">{ROLE_DESCRIPTION[r]}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 text-[11px] text-ink-500 leading-relaxed">
+            By signing in you agree to abide by the Public Finance Management Act No. 1 of 2018,
+            CDF Act No. 1 of 2024, and Data Protection Act No. 3 of 2021. All actions on this
+            platform are logged for audit purposes.
+          </div>
+        </div>
       </div>
     </div>
   );
